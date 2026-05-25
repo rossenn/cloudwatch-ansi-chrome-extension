@@ -4,10 +4,6 @@
   "version": "1.0.0",
   "description": "Renders ANSI SGR escape codes (8/16/256/truecolor + bold/italic/underline) inside the AWS CloudWatch console.",
   "permissions": ["storage"],
-  "host_permissions": [
-    "https://*.console.aws.amazon.com/*",
-    "https://console.aws.amazon.com/*"
-  ],
   "content_scripts": [
     {
       "matches": [
