@@ -1,0 +1,22 @@
+{
+  "name": "cloudwatch-ansi-chrome-extension",
+  "version": "1.0.0",
+  "description": "A Chromium extension (Manifest V3) that interprets ANSI SGR escape codes inside the AWS CloudWatch console. Built originally to render the colors emitted by `AwsLambdaConsoleAppender` and `MessageHighlightConverter` in the `ph558-crem-lib-common-utils` library, but the parser is general and covers the full SGR spec — any service writing ANSI to stdout will render.",
+  "main": "content.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "node tests/parser.test.js && node tests/e2e.test.js",
+    "test:unit": "node tests/parser.test.js",
+    "test:e2e": "node tests/e2e.test.js",
+    "build": "node scripts/build.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "puppeteer": "^24.42.0"
+  }
+}

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ANSI Colors for CloudWatch</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      width: 260px;
+      margin: 0;
+      padding: 14px 16px;
+      color: #1d1d1f;
+    }
+    h1 {
+      font-size: 13px;
+      font-weight: 600;
+      margin: 0 0 10px;
+      letter-spacing: .2px;
+    }
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .toggle input { transform: scale(1.1); }
+    .hint {
+      color: #666;
+      font-size: 11px;
+      line-height: 1.4;
+      margin-top: 10px;
+    }
+    .swatch {
+      display: flex;
+      gap: 3px;
+      margin-top: 12px;
+    }
+    .swatch span {
+      flex: 1;
+      height: 10px;
+      border-radius: 2px;
+    }
+  </style>
+</head>
+<body>
+  <h1>ANSI Colors for CloudWatch</h1>
+  <label class="toggle">
+    <input type="checkbox" id="enabled">
+    <span>Enabled</span>
+  </label>
+  <p class="hint">The active CloudWatch tab reloads when you toggle this.</p>
+  <div class="swatch" title="Appender colors">
+    <span style="background:#ff8700"></span>
+    <span style="background:#ffaf5f"></span>
+    <span style="background:#5fafff"></span>
+    <span style="background:#000080"></span>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

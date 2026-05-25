@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ANSI Colors for CloudWatch — Demo</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 24px;
+      color: #1d1d1f;
+      background: #fafafa;
+    }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    h2 { font-size: 14px; margin: 18px 0 8px; color: #444; }
+    p { color: #555; font-size: 13px; }
+    .panel {
+      background: #ffffff;
+      border: 1px solid #e2e2e2;
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .panel + p { margin-top: 6px; }
+    .raw { color: #888; }
+    .controls { margin: 14px 0; }
+    button {
+      font: inherit;
+      padding: 6px 12px;
+      border: 1px solid #d0d0d0;
+      background: #fff;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover { background: #f4f4f4; }
+  </style>
+</head>
+<body>
+  <h1>ANSI Colors for CloudWatch — Standalone Demo</h1>
+  <p>
+    This page bundles the same parser the extension uses and renders sample
+    log lines as the AwsLambdaConsoleAppender would emit them. Open this
+    file directly in a browser; no extension install required.
+  </p>
+
+  <div class="controls">
+    <button id="render">Render</button>
+    <button id="reset">Show raw</button>
+  </div>
+
+  <h2>1. Logback named colors (the appender's pattern)</h2>
+  <pre class="panel" id="ex1"></pre>
+
+  <h2>2. Highlighted Event / Command labels (MessageHighlightConverter)</h2>
+  <pre class="panel" id="ex2"></pre>
+
+  <h2>3. Publisher facade (lighter shades)</h2>
+  <pre class="panel" id="ex3"></pre>
+
+  <h2>4. General SGR — bold, italic, underline, 256-color, truecolor</h2>
+  <pre class="panel" id="ex4"></pre>
+
+  <h2>5. OSC 8 hyperlinks (clickable; the events-app workflow)</h2>
+  <pre class="panel" id="ex5"></pre>
+
+  <script>
+    /* ---- Parser (mirrors content.js) ---------------------------------- */
+    const ESC = '\x1b';
+    const ESC_MARKERS = ['\x1b', '\\u001b', '\\033', '\\e['];
+    const ANY_CSI = /(?:\x1b|\\u001b|\\033|\\e)\[([\d;?]*)([@-~])/g;
+    const ANY_OSC8 = /(?:\x1b|\\u001b|\\033|\\e)\]8;([^;]*);([^\x1b\x07]*?)(?:(?:\x1b|\\u001b|\\033|\\e)\\|\x07)/g;
+    const BARE_SGR = /\[(\d{1,3}(?:;\d{1,3}){0,4})m/g;
+
+    const BASE_COLORS = [
+      '#000000', '#cd3131', '#0dbc79', '#e5e510',
+      '#2472c8', '#bc3fbc', '#11a8cd', '#e5e5e5',
+      '#666666', '#f14c4c', '#23d18b', '#f5f543',
+      '#3b8eea', '#d670d6', '#29b8db', '#ffffff',
+    ];
+    const PALETTE_256 = (() => {
+      const p = BASE_COLORS.slice();
+      const cube = [0, 95, 135, 175, 215, 255];
+      for (let i = 0; i < 216; i++) {
+        const r = cube[Math.floor(i / 36) % 6];
+        const g = cube[Math.floor(i / 6) % 6];
+        const b = cube[i % 6];
+        p.push('#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join(''));
+      }
+      for (let i = 0; i < 24; i++) {
+        const v = 8 + i * 10;
+        p.push('#' + [v,v,v].map(c => c.toString(16).padStart(2,'0')).join(''));
+      }
+      return p;
+    })();
+
+    const def = () => ({
+      fg:null,bg:null,bold:false,dim:false,italic:false,
+      underline:false,inverse:false,strike:false
+    });
+
+    function applySgr(state, paramString) {
+      const codes = paramString === '' ? [0] :
+        paramString.split(';').map(s => s === '' ? 0 : parseInt(s,10)|0);
+      for (let i = 0; i < codes.length; i++) {
+        const c = codes[i];
+        if (c === 0) state = def();
+        else if (c === 1) state.bold = true;
+        else if (c === 2) state.dim = true;
+        else if (c === 3) state.italic = true;
+        else if (c === 4) state.underline = true;
+        else if (c === 7) state.inverse = true;
+        else if (c === 9) state.strike = true;
+        else if (c === 22) { state.bold = false; state.dim = false; }
+        else if (c === 23) state.italic = false;
+        else if (c === 24) state.underline = false;
+        else if (c === 27) state.inverse = false;
+        else if (c === 29) state.strike = false;
+        else if (c >= 30 && c <= 37) state.fg = BASE_COLORS[c - 30];
+        else if (c === 38) {
+          const n = codes[i+1];
+          if (n === 5 && i+2 < codes.length) { state.fg = PALETTE_256[codes[i+2]] || null; i += 2; }
+          else if (n === 2 && i+4 < codes.length) { state.fg = `rgb(${codes[i+2]},${codes[i+3]},${codes[i+4]})`; i += 4; }
+        }
+        else if (c === 39) state.fg = null;
+        else if (c >= 40 && c <= 47) state.bg = BASE_COLORS[c - 40];
+        else if (c === 48) {
+          const n = codes[i+1];
+          if (n === 5 && i+2 < codes.length) { state.bg = PALETTE_256[codes[i+2]] || null; i += 2; }
+          else if (n === 2 && i+4 < codes.length) { state.bg = `rgb(${codes[i+2]},${codes[i+3]},${codes[i+4]})`; i += 4; }
+        }
+        else if (c === 49) state.bg = null;
+        else if (c >= 90 && c <= 97) state.fg = BASE_COLORS[c - 90 + 8];
+        else if (c >= 100 && c <= 107) state.bg = BASE_COLORS[c - 100 + 8];
+      }
+      return state;
+    }
+
+    function styleToCss(s) {
+      let fg = s.fg, bg = s.bg;
+      if (s.inverse) { const a = fg, b = bg; fg = b || '#fff'; bg = a || '#000'; }
+      const parts = [];
+      if (fg) parts.push('color:' + fg);
+      if (bg) parts.push('background-color:' + bg);
+      if (s.bold) parts.push('font-weight:600');
+      if (s.dim) parts.push('opacity:.7');
+      if (s.italic) parts.push('font-style:italic');
+      const deco = [];
+      if (s.underline) deco.push('underline');
+      if (s.strike) deco.push('line-through');
+      if (deco.length) parts.push('text-decoration:' + deco.join(' '));
+      return parts.join(';');
+    }
+
+    function render(target, raw) {
+      target.textContent = '';
+      let cursor = 0;
+      let style = def();
+      let linkUrl = null;
+      const hasRealEsc = ESC_MARKERS.some(mk => raw.indexOf(mk) >= 0);
+      const matches = collectMatches(raw, hasRealEsc);
+      for (const m of matches) {
+        if (m.index > cursor) emit(target, raw.slice(cursor, m.index), style, linkUrl);
+        if (m.kind === 'sgr') style = applySgr({...style}, m.params);
+        else if (m.kind === 'osc8') linkUrl = m.url ? m.url : null;
+        cursor = m.end;
+      }
+      if (cursor < raw.length) emit(target, raw.slice(cursor), style, linkUrl);
+    }
+
+    function collectMatches(text, hasRealEsc) {
+      const out = [];
+      if (hasRealEsc) {
+        ANY_CSI.lastIndex = 0;
+        let m;
+        while ((m = ANY_CSI.exec(text)) !== null) {
+          out.push({ index: m.index, end: ANY_CSI.lastIndex, kind: m[2] === 'm' ? 'sgr' : 'csi', params: m[1] });
+        }
+        ANY_OSC8.lastIndex = 0;
+        while ((m = ANY_OSC8.exec(text)) !== null) {
+          out.push({ index: m.index, end: ANY_OSC8.lastIndex, kind: 'osc8', url: m[2] });
+        }
+        out.sort((a, b) => a.index - b.index);
+      } else {
+        BARE_SGR.lastIndex = 0;
+        let m;
+        while ((m = BARE_SGR.exec(text)) !== null) {
+          out.push({ index: m.index, end: BARE_SGR.lastIndex, kind: 'sgr', params: m[1] });
+        }
+      }
+      return out;
+    }
+
+    function emit(target, text, style, linkUrl) {
+      const css = styleToCss(style);
+      if (linkUrl) {
+        const a = document.createElement('a');
+        a.setAttribute('href', linkUrl);
+        a.setAttribute('target', '_blank');
+        a.setAttribute('rel', 'noopener noreferrer');
+        if (css) a.setAttribute('style', css);
+        a.textContent = text;
+        target.appendChild(a);
+      } else if (css) {
+        const span = document.createElement('span');
+        span.setAttribute('style', css);
+        span.textContent = text;
+        target.appendChild(span);
+      } else {
+        target.appendChild(document.createTextNode(text));
+      }
+    }
+
+    /* ---- Sample log lines --------------------------------------------- */
+    const G  = '\x1b[32m', C  = '\x1b[36m', M  = '\x1b[35m', B = '\x1b[34m';
+    const R  = '\x1b[0m',  RD = '\x1b[31m', BR = '\x1b[1;31m';
+    const O  = '\x1b[38;5;208m', LO = '\x1b[38;5;215m';
+    const B2 = '\x1b[38;5;75m',  LB = '\x1b[38;5;4m';
+    // OSC 8 hyperlink open/close. The URL is captured between OL and ST,
+    // and CL terminates the link region.
+    const link = (url) => '\x1b]8;;' + url + '\x1b\\';
+    const linkClose = '\x1b]8;;\x1b\\';
+
+    const samples = {
+      ex1: [
+        `${G}1234-abcd-5678${R} [${B}INFO  ${R}] ${C}2026-04-29 10:31:42.512${R} ${M}com.nextera.fim.handler${R}[${B}main${R}] - boot complete`,
+        `${G}1234-abcd-5678${R} [${BR}ERROR ${R}] ${C}2026-04-29 10:31:43.001${R} ${M}com.nextera.fim.api.Service${R}[${B}pool-1${R}] - upstream timeout`,
+        `${G}1234-abcd-5678${R} [${RD}WARN  ${R}] ${C}2026-04-29 10:31:43.221${R} ${M}com.nextera.fim.cache${R}[${B}cache-evict${R}] - eviction backlog`,
+      ].join('\n'),
+      ex2: [
+        `received ${O}GuaranteeUpdatedEvent:{"id":"42","status":"OK"}${R} from upstream`,
+        `dispatching ${B2}IssueGuaranteeCommand:7${R} to handler`,
+        `processed ${O}3 GuaranteeUpdatedEvent${R} in 12ms`,
+        `${B2}IssueGuaranteeCommand(intercepted):2${R} skipped`,
+      ].join('\n'),
+      ex3: [
+        `publishing ${LO}GuaranteeUpdatedEvent:{"id":"43"}${R} (publisher facade)`,
+        `publishing ${LB}IssueGuaranteeCommand:9${R} (publisher facade)`,
+      ].join('\n'),
+      ex4: [
+        `\x1b[1mbold\x1b[0m \x1b[3mitalic\x1b[0m \x1b[4munderline\x1b[0m \x1b[9mstrike\x1b[0m \x1b[7minverse\x1b[0m`,
+        `truecolor: \x1b[38;2;255;87;34mrgb(255,87,34)\x1b[0m  \x1b[48;2;30;30;30m\x1b[38;2;255;255;255m on dark \x1b[0m`,
+        `xterm 256: \x1b[38;5;82mlime\x1b[0m \x1b[38;5;201mhot pink\x1b[0m \x1b[38;5;220mgold\x1b[0m`,
+        `bg + fg: \x1b[44;97m white on blue \x1b[0m  \x1b[103;30m black on bright yellow \x1b[0m`,
+      ].join('\n'),
+      ex5: [
+        // The realistic shape MessageHighlightConverter emits: link OPEN,
+        // SGR color, label, SGR reset, link CLOSE — surrounding plain text.
+        `Handling ${link('https://devrisk.nee.com/events?correlationId=xyz')}${O}FooEvent:{"id":42}${R}${linkClose} from upstream`,
+        `dispatching ${link('https://devrisk.nee.com/events?correlationId=xyz')}${B2}IssueGuaranteeCommand:7${R}${linkClose} to handler`,
+        `processed ${link('https://uatrisk.nee.com/events?correlationId=abc')}${O}3 GuaranteeUpdatedEvent${R}${linkClose} in 12ms`,
+      ].join('\n'),
+    };
+
+    function paint() {
+      for (const id of Object.keys(samples)) render(document.getElementById(id), samples[id]);
+    }
+    function showRaw() {
+      for (const id of Object.keys(samples)) {
+        const el = document.getElementById(id);
+        el.textContent = samples[id].replace(/\x1b/g, '\\x1b');
+        el.classList.add('raw');
+      }
+    }
+    document.getElementById('render').addEventListener('click', () => {
+      for (const id of Object.keys(samples)) document.getElementById(id).classList.remove('raw');
+      paint();
+    });
+    document.getElementById('reset').addEventListener('click', showRaw);
+
+    paint();
+  </script>
+</body>
+</html>
